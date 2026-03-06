@@ -56,6 +56,11 @@ python main.py --ticker SPY --model heston
 streamlit run dashboard.py
 ```
 
+### 🚀 6. Deploy to Render (Cloud)
+1.  Connect your GitHub repository to [Render.com](https://render.com).
+2.  Choose **Blueprint** to use the included `render.yaml`.
+3.  Render will automatically build and deploy your Aegis Command Center.
+
 
 ## 📊 Outputs
 
