@@ -1,4 +1,4 @@
-# Dynamic Delta-Hedging Simulator 📈
+# Aegis Hedge Systems 🛡️📈
 
 A production-grade risk engine designed for hedge funds and quantitative trading desks to simulate and analyze the performance of delta-neutral hedging strategies.
 
