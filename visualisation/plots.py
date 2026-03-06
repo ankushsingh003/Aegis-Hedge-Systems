@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from config.settings import SimulationConfig
 
 def setup_plotting_style():
@@ -18,52 +18,58 @@ def setup_plotting_style():
         'grid.alpha': 0.2
     })
 
-def plot_gbm_paths(paths: np.ndarray, save_path: str):
+def plot_gbm_paths(paths: np.ndarray, save_path: Optional[str] = None):
     """Plots a subset of GBM paths."""
     n_paths_to_plot = min(paths.shape[0], 100)
     time_steps = np.arange(paths.shape[1])
     
-    plt.figure(figsize=(10, 6))
-    plt.plot(time_steps, paths[:n_paths_to_plot, :].T, color='cyan', alpha=0.1)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(time_steps, paths[:n_paths_to_plot, :].T, color='cyan', alpha=0.1)
     
     # Plot percentiles
     p5 = np.percentile(paths, 5, axis=0)
     p50 = np.percentile(paths, 50, axis=0)
     p95 = np.percentile(paths, 95, axis=0)
     
-    plt.plot(time_steps, p5, color='red', linestyle='--', label='5th Percentile')
-    plt.plot(time_steps, p50, color='white', linewidth=2, label='Median')
-    plt.plot(time_steps, p95, color='green', linestyle='--', label='95th Percentile')
+    ax.plot(time_steps, p5, color='red', linestyle='--', label='5th Percentile')
+    ax.plot(time_steps, p50, color='white', linewidth=2, label='Median')
+    ax.plot(time_steps, p95, color='green', linestyle='--', label='95th Percentile')
     
-    plt.title("Simulated Geometric Brownian Motion Paths")
-    plt.xlabel("Steps")
-    plt.ylabel("Price")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(save_path)
-    plt.close()
+    ax.set_title("Simulated Price Paths")
+    ax.set_xlabel("Steps")
+    ax.set_ylabel("Price")
+    ax.legend()
+    ax.grid(True)
+    
+    if save_path:
+        plt.savefig(save_path)
+        plt.close(fig)
+    return fig
 
-def plot_pnl_distribution(pnl: np.ndarray, save_path: str):
+def plot_pnl_distribution(pnl: np.ndarray, save_path: Optional[str] = None):
     """Plots the distribution of final PnL."""
-    plt.figure(figsize=(10, 6))
-    plt.hist(pnl, bins=50, color='royalblue', edgecolor='white', alpha=0.7, density=True)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.hist(pnl, bins=50, color='royalblue', edgecolor='white', alpha=0.7, density=True)
     
     # Overlay normal distribution
     mu, std = np.mean(pnl), np.std(pnl)
     x = np.linspace(np.min(pnl), np.max(pnl), 100)
     p = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / std)**2)
-    plt.plot(x, p, 'r', linewidth=2, label=f'Normal Fit (μ={mu:.2f}, σ={std:.2f})')
+    ax.plot(x, p, 'r', linewidth=2, label=f'Normal Fit (μ={mu:.2f}, σ={std:.2f})')
     
-    plt.axvline(mu, color='white', linestyle='-', label='Mean PnL')
-    plt.axvline(0, color='yellow', linestyle='--', label='Zero PnL')
+    ax.axvline(mu, color='white', linestyle='-', label='Mean PnL')
+    ax.axvline(0, color='yellow', linestyle='--', label='Zero PnL')
     
-    plt.title("Hedge PnL Distribution")
-    plt.xlabel("Final PnL")
-    plt.ylabel("Probability Density")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(save_path)
-    plt.close()
+    ax.set_title("Hedge PnL Distribution")
+    ax.set_xlabel("Final PnL")
+    ax.set_ylabel("Probability Density")
+    ax.legend()
+    ax.grid(True)
+    
+    if save_path:
+        plt.savefig(save_path)
+        plt.close(fig)
+    return fig
 
 def plot_cost_sensitivity(results_list: List[Dict[str, Any]], param_values: List[float], save_path: str):
     """Plots how PnL varies with transaction costs."""

@@ -51,6 +51,11 @@ python main.py --model heston --v0 0.04 --kappa 2.0 --theta 0.04
 python main.py --ticker SPY --model heston
 ```
 
+### 5. Launch the Interpretation Dashboard
+```bash
+streamlit run dashboard.py
+```
+
 
 ## 📊 Outputs
 
