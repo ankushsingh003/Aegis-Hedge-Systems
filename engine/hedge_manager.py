@@ -1,8 +1,9 @@
 import numpy as np
-from typing import Literal, Dict, Any, List
+from typing import Literal, Dict, Any, List, Optional
 from dataclasses import dataclass
 from models.bsm import bsm_price
 from models.greeks import calculate_greeks
+from models.heston import heston_price
 from engine.transaction_costs import calculate_transaction_costs
 from config.settings import SimulationConfig
 
@@ -14,31 +15,52 @@ class PortfolioState:
 
 def run_hedging_simulation(
     paths: np.ndarray,
-    config: SimulationConfig
+    config: SimulationConfig,
+    variance_paths: Optional[np.ndarray] = None
 ) -> Dict[str, np.ndarray]:
     """
     Simulates a dynamic delta-hedging strategy across multiple price paths.
+    Supports both BSM (constant vol) and Heston (stochastic vol) models.
     
     Parameters:
-    - paths: NumPy array of shape (n_paths, n_steps + 1)
+    - paths: Asset price paths (n_paths, n_steps + 1)
     - config: SimulationConfig object
-    
-    Returns:
-    - Dictionary containing PnL components and trading statistics.
+    - variance_paths: Optional variance paths for Heston model
     """
     n_paths, n_steps_plus_1 = paths.shape
     n_steps = n_steps_plus_1 - 1
     dt = config.T / n_steps
     
+    def get_delta_and_price(S_val, v_val, T_rem):
+        if config.model_type == "bsm":
+            price = bsm_price(S_val, config.K, T_rem, config.r, config.sigma, config.option_type)
+            greeks = calculate_greeks(S_val, config.K, T_rem, config.r, config.sigma, config.option_type)
+            return greeks.delta, price
+        else:
+            # Heston model
+            # For Heston, we need the variance at this step
+            # heston_price doesn't support vectorization easily due to quad integration
+            # We compute scalar values in a loop for the first step, then for subsequent
+            # However, for performance, we'll implement a vectorized wrapper or loop handle
+            deltas = np.zeros(n_paths)
+            prices = np.zeros(n_paths)
+            eps = S_val * 0.01 # 1% shift for numerical delta
+            
+            # Note: We loop over paths for Heston since quad is not vectorized
+            for i in range(n_paths):
+                p_main = heston_price(S_val[i], config.K, T_rem, config.r, v_val[i], 
+                                      config.kappa, config.theta, config.sigma_v, config.rho, config.option_type)
+                p_plus = heston_price(S_val[i] + eps[i], config.K, T_rem, config.r, v_val[i], 
+                                      config.kappa, config.theta, config.sigma_v, config.rho, config.option_type)
+                prices[i] = p_main
+                deltas[i] = (p_plus - p_main) / eps[i]
+            return deltas, prices
+
     # Initialize portfolio
-    # 1. At t=0, receive option premium (sell the option)
-    t_0 = 0.0
     S_0 = paths[:, 0]
-    initial_option_price = bsm_price(S_0, config.K, config.T, config.r, config.sigma, config.option_type)
+    v_0 = variance_paths[:, 0] if variance_paths is not None else np.full(n_paths, config.sigma**2)
     
-    # 2. Initial hedge (Delta)
-    initial_greeks = calculate_greeks(S_0, config.K, config.T, config.r, config.sigma, config.option_type)
-    initial_delta = initial_greeks.delta
+    initial_delta, initial_option_price = get_delta_and_price(S_0, v_0, config.T)
     
     # Initial cash: premium received - cost of buying Delta shares - transaction costs
     initial_shares = initial_delta
@@ -65,9 +87,9 @@ def run_hedging_simulation(
         # Grow cash at risk-free rate
         cash *= np.exp(config.r * dt)
         
-        # Calculate current Greeks
-        current_greeks = calculate_greeks(S_t, config.K, T_remaining, config.r, config.sigma, config.option_type)
-        target_delta = current_greeks.delta
+        # Calculate current Greeks/Delta
+        v_t = variance_paths[:, step] if variance_paths is not None else np.full(n_paths, config.sigma**2)
+        target_delta, current_price = get_delta_and_price(S_t, v_t, T_remaining)
         
         # Check rebalance condition
         should_rebalance = np.zeros(n_paths, dtype=bool)
@@ -80,9 +102,11 @@ def run_hedging_simulation(
         elif config.rebalance_freq == "threshold":
             should_rebalance = np.abs(target_delta - last_rebalance_delta) > config.delta_threshold
         elif config.rebalance_freq == "gamma_scaled":
-            # Heuristic: rebalance if Gamma is large or certain threshold met
-            # For simplicity, we can use a dynamic threshold based on Gamma
-            threshold = 0.01 / (current_greeks.gamma + 1e-5)
+            if config.model_type == "bsm":
+                greeks = calculate_greeks(S_t, config.K, T_remaining, config.r, config.sigma, config.option_type)
+                threshold = 0.01 / (greeks.gamma + 1e-5)
+            else:
+                threshold = 0.01 # Fallback for Heston
             should_rebalance = np.abs(target_delta - last_rebalance_delta) > threshold
             
         # Perform rebalancing

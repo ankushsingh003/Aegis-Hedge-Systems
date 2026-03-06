@@ -17,8 +17,16 @@ class SimulationConfig:
     
     # Strategy parameters
     rebalance_freq: Literal["daily", "weekly", "threshold", "gamma_scaled"] = "daily"
-    delta_threshold: float = 0.05  # Only used if rebalance_freq is "threshold"
+    delta_threshold: float = 0.05
     option_type: Literal["call", "put"] = "call"
+    model_type: Literal["bsm", "heston"] = "bsm"
+    
+    # Heston parameters (if model_type == "heston")
+    v0: float = 0.04      # Initial variance (sigma^2)
+    kappa: float = 2.0    # Mean reversion speed
+    theta: float = 0.04   # Long-run variance
+    sigma_v: float = 0.3  # Vol of vol
+    rho: float = -0.7     # Correlation
     
     # Transaction cost parameters
     cost_model: Literal["proportional", "fixed", "bps"] = "proportional"

@@ -8,8 +8,11 @@ This simulator bridges the gap between theoretical Black-Scholes pricing and rea
 
 ### Key Features
 - **Full Greeks Suite**: $\Delta, \gamma, \nu, \theta, \rho$ plus cross-Greeks like Vanna and Charm.
+- **Stochastic Volatility Models**: Integrated **Heston model** support for joint price/variance simulations and pricing.
+- **Live Data Integration**: Fetch real-time spot prices and estimate volatility using Yahoo Finance.
 - **Adaptive Rebalancing**: Daily, weekly, threshold-based, and Gamma-scaled strategies.
 - **Institutional Friction Models**: Proportional costs, fixed fees, and Basis Points (bps) slippage.
+
 - **PnL Attribution**: Detailed breakdown of hedging performance, costs, and risk metrics.
 - **Vectorized Performance**: Built with NumPy for high-throughput Monte Carlo simulations.
 
@@ -38,10 +41,16 @@ pip install -r requirements.txt
 python main.py --n_paths 1000 --rebalance daily --cost_model bps --cost_param 10
 ```
 
-### 3. Run Threshold-based Hedging
+### 3. Run Heston Simulation
 ```bash
-python main.py --rebalance threshold --delta_threshold 0.05
+python main.py --model heston --v0 0.04 --kappa 2.0 --theta 0.04
 ```
+
+### 4. Fetch Live Data for SPY
+```bash
+python main.py --ticker SPY --model heston
+```
+
 
 ## 📊 Outputs
 
