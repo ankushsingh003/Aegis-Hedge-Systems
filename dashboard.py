@@ -13,27 +13,92 @@ from models.heston import heston_price
 from data.provider import YFinanceProvider
 
 # Page Config
-st.set_page_config(page_title="Aegis Hedge Systems | Real-Time Dashboard", layout="wide")
+st.set_page_config(page_title="Aegis Hedge Systems | Command Center", layout="wide")
 
-# Custom CSS for premium look
+# Premium UI CSS (Glassmorphism & Fixed Header vibes)
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    .stMetric { background-color: #1e2130; padding: 15px; border-radius: 10px; border: 1px solid #3e4150; }
-    .stAlert { background-color: #1e2130; border: 1px solid #3e4150; }
-    div[data-testid="stExpander"] { background-color: #1e2130; border: 1px solid #3e4150; border-radius: 5px; }
+    /* Main Background */
+    .main {
+        background-color: #0d1117;
+        color: #c9d1d9;
+    }
+    
+    /* Input Container Styling */
+    .control-center {
+        background: rgba(23, 28, 36, 0.7);
+        border-radius: 15px;
+        padding: 2rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        margin-bottom: 2rem;
+    }
+    
+    /* Metrics Box */
+    [data-testid="stMetric"] {
+        background: rgba(30, 39, 53, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 15px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    
+    /* Metric Labels */
+    [data-testid="stMetricLabel"] {
+        color: #8b949e !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Metric Values */
+    [data-testid="stMetricValue"] {
+        color: #58a6ff !important;
+    }
+
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+        background-color: transparent;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: transparent;
+        border-radius: 4px 4px 0px 0px;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        color: #8b949e;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: transparent;
+        color: #58a6ff !important;
+        border-bottom: 2px solid #58a6ff !important;
+    }
+    
+    /* Sidebar Hide (Optional but cleaner) */
+    [data-testid="stSidebar"] {
+        display: none;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #f0f6fc;
+        font-weight: 700;
+    }
+    
+    .stHeader {
+        background-color: transparent;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛡️ Aegis Hedge Systems")
-st.subheader("Real-Time Quantitative Risk Engine")
+# --- Logic Section ---
 
-# Simulation logic (Cached correctly now)
 @st.cache_data
 def get_sim_results(config_dict: dict):
-    # Re-build config from dict to ensure it's hashable and reactive
     config = SimulationConfig(**config_dict)
-    
     if config.model_type == "bsm":
         paths = generate_gbm_paths(S0=config.S0, mu=config.r, sigma=config.sigma, T=config.T, n_steps=config.n_steps, n_paths=config.n_paths, seed=config.seed)
         var_paths = None
@@ -53,54 +118,77 @@ def fetch_ticker_data(ticker_symbol: str):
     vol = provider.estimate_volatility(ticker_symbol)
     return spot, vol
 
-# Sidebar - Settings
-st.sidebar.header("🕹️ Simulation Control")
+# --- Application UI ---
 
-ticker_input = st.sidebar.text_input("Live Ticker (e.g. SPY, AAPL)", value="", help="Fetches live spot and hist volatility")
+# 1. Header & Branding
+st.markdown("<h1 style='text-align: center; margin-bottom: 0px;'>🛡️ AEGIS HEDGE SYSTEMS</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #8b949e; margin-bottom: 30px;'>Next-Gen Derivatives Risk Command Center</p>", unsafe_allow_html=True)
 
-model_type = st.sidebar.selectbox("Pricing Model", ["bsm", "heston"])
-option_type = st.sidebar.selectbox("Option Type", ["call", "put"])
+# 2. Top-Level Control Center (Glass Container)
+with st.container():
+    st.markdown('<div class="control-center">', unsafe_allow_html=True)
+    
+    row1_col1, row1_col2, row1_col3, row1_col4 = st.columns([1.5, 1, 1, 1])
+    
+    with row1_col1:
+        ticker_input = st.text_input("Live Ticker 🔍", value="", placeholder="e.g. SPY, BTC-USD")
+    with row1_col2:
+        model_type = st.selectbox("Pricing Engine", ["bsm", "heston"])
+    with row1_col3:
+        option_type = st.selectbox("Option Class", ["call", "put"])
+    with row1_col4:
+        seed_val = st.number_input("Chaos Seed 🎲", value=42, step=1)
 
-# Default values
-S0_def = 100.0
-sigma_def = 0.20
+    # Defaults for reactive inputs
+    S0_def, sigma_def = 100.0, 0.20
+    if ticker_input:
+        try:
+            S0_ticker, sigma_ticker = fetch_ticker_data(ticker_input)
+            S0_def, sigma_def = S0_ticker, sigma_ticker
+            st.toast(f"Synchronized with {ticker_input} market data.", icon="✅")
+        except:
+            st.error("Invalid Ticker.")
 
-# Update values if ticker is provided
-if ticker_input:
-    try:
-        S0_ticker, sigma_ticker = fetch_ticker_data(ticker_input)
-        st.sidebar.success(f"Live {ticker_input}: ${S0_ticker:.2f} | Vol: {sigma_ticker:.2%}")
-        S0_def = S0_ticker
-        sigma_def = sigma_ticker
-    except Exception as e:
-        st.sidebar.error(f"Error: {e}")
+    st.markdown("<hr style='border: 0.1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+    
+    row2_col1, row2_col2, row2_col3, row2_col4, row2_col5 = st.columns(5)
+    with row2_col1:
+        S0_val = st.number_input("Spot ($)", value=float(S0_def), step=1.0)
+    with row2_col2:
+        K_val = st.number_input("Strike ($)", value=S0_val if ticker_input else 100.0, step=1.0)
+    with row2_col3:
+        sigma_val = st.slider("Vol (σ)", 0.05, 1.0, float(sigma_def), step=0.01)
+    with row2_col4:
+        T_val = st.slider("Expiry (Yrs)", 0.05, 2.0, 1.0, step=0.05)
+    with row2_col5:
+        r_val = st.slider("Rate (%)", 0.00, 0.15, 0.05, step=0.01)
 
-# Collapsible sections for parameters
-with st.sidebar.expander("📈 Asset Parameters", expanded=True):
-    S0_val = st.number_input("Spot Price ($)", value=float(S0_def), format="%.2f")
-    K_val = st.number_input("Strike Price ($)", value=float(S0_def), format="%.2f")
-    T_val = st.slider("Time to Expiry (Years)", 0.05, 2.0, 1.0)
-    r_val = st.slider("Risk-free Rate", 0.0, 0.1, 0.05, step=0.01)
-    sigma_val = st.slider("Volatility (σ)", 0.05, 1.0, float(sigma_def), step=0.01)
+    if model_type == "heston":
+        st.markdown("<p style='color: #8b949e; font-size: 0.8rem; margin-top: 10px;'>Advanced Stochastic Parameters</p>", unsafe_allow_html=True)
+        h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns(5)
+        with h_col1: v0_val = st.number_input("v0", value=0.04, format="%.4f")
+        with h_col2: kappa_val = st.slider("Reversion (κ)", 0.1, 5.0, 2.0)
+        with h_col3: theta_val = st.slider("Long-run (θ)", 0.01, 0.1, 0.04)
+        with h_col4: sigma_v_val = st.slider("Vol-of-Vol (ξ)", 0.1, 1.0, 0.3)
+        with h_col5: rho_val = st.slider("Correl (ρ)", -1.0, 1.0, -0.7)
+    else:
+        v0_val, kappa_val, theta_val, sigma_v_val, rho_val = 0.04, 2.0, 0.04, 0.3, -0.7
 
-if model_type == "heston":
-    with st.sidebar.expander("🌀 Heston Parameters", expanded=True):
-        v0_val = st.number_input("Initial Var (v0)", value=0.04, format="%.4f")
-        kappa_val = st.slider("Mean Reversion (κ)", 0.1, 5.0, 2.0)
-        theta_val = st.slider("Long-run Var (θ)", 0.01, 0.2, 0.04)
-        sigma_v_val = st.slider("Vol of Vol (ξ)", 0.1, 1.0, 0.3)
-        rho_val = st.slider("Correlation (ρ)", -1.0, 1.0, -0.7)
-else:
-    v0_val, kappa_val, theta_val, sigma_v_val, rho_val = 0.04, 2.0, 0.04, 0.3, -0.7
+    st.markdown("<hr style='border: 0.1px solid rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+    
+    row3_col1, row3_col2, row3_col3, row3_col4 = st.columns(4)
+    with row3_col1:
+        rebalance_val = st.selectbox("Hedge Strategy", ["daily", "weekly", "threshold", "gamma_scaled"])
+    with row3_col2:
+        cost_model_val = st.selectbox("Fees", ["proportional", "bps", "fixed"])
+    with row3_col3:
+        cost_param_val = st.number_input("Cost Rate", value=0.001, format="%.4f")
+    with row3_col4:
+        n_paths_val = st.slider("Monte Carlo Paths", 10, 500, 100 if model_type == "bsm" else 30)
 
-with st.sidebar.expander("🛠️ Strategy & Simulation", expanded=True):
-    rebalance_val = st.selectbox("Frequency", ["daily", "weekly", "threshold", "gamma_scaled"])
-    cost_model_val = st.selectbox("Cost Model", ["proportional", "fixed", "bps"])
-    cost_param_val = st.number_input("Cost Value", value=10.0 if cost_model_val == "bps" else 0.001, format="%.6f")
-    n_paths_val = st.number_input("Num Paths", value=100 if model_type == "bsm" else 20, step=10)
-    seed_val = st.number_input("Random Seed (Change to shuffle)", value=42)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Build a dictionary for caching (Streamlit hashes dicts better than objects)
+# 3. Execution & Results
 config_dict = {
     "S0": S0_val, "K": K_val, "T": T_val, "r": r_val, "sigma": sigma_val,
     "n_paths": int(n_paths_val), "n_steps": 252,
@@ -111,48 +199,52 @@ config_dict = {
     "seed": int(seed_val)
 }
 
-# Clear Cache if needed
-if st.sidebar.button("🧹 Clear All Cache"):
-    st.cache_data.clear()
-    st.rerun()
-
-# Run Simulation in REAL TIME (No button required for initial load, but button remains if user wants to force)
-# However, the user wants "totally dynamic", so we just call it every render.
-# because of st.cache_data, it will be fast if parameters haven't changed.
-with st.spinner("Processing..."):
+# Real-time computation
+with st.spinner("Processing Risk Engine..."):
     paths, results, stats, initial_premium = get_sim_results(config_dict)
 
-# 1. Metric Callouts
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Mean PnL", f"${stats['mean_pnl']:.4f}")
-col2.metric("Sharpe-like Ratio", f"{stats['sharpe_ratio']:.2f}")
-col3.metric("Avg Trans. Cost", f"${stats['avg_costs']:.4f}")
-col4.metric("VaR (95%)", f"${stats['var_95']:.4f}")
+# Metrics Grid
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("PnL EXPECTATION", f"${stats['mean_pnl']:.4f}")
+m2.metric("SHARPE (IRIS)", f"{stats['sharpe_ratio']:.2f}")
+m3.metric("SLIPPAGE DRAG", f"${stats['avg_costs']:.4f}")
+m4.metric("VaR (95%)", f"${stats['var_95']:.4f}")
 
-# Interpretation Cards
-if stats['mean_pnl'] == 0 and initial_premium < 0.01:
-    st.warning("⚖️ **Quantitative Alert: Deep OTM Option**  \nYour choice of Strike ($" + str(K_val) + ") is far from Spot ($" + str(S0_val) + "). The Delta is effectively zero.")
+st.markdown("<br>", unsafe_allow_html=True)
 
-# 2. Visuals
+# Tabs for visual deep-dives
 setup_plotting_style()
-tab1, tab2, tab3 = st.tabs(["📊 Price Paths", "📈 PnL Analysis", "🧠 Quant Interpretation"])
+tab_paths, tab_pnl, tab_logic = st.tabs(["� MARKET ENVELOPE", "� HEDGE DISTRIBUTION", "🧠 QUANT INSIGHTS"])
 
-with tab1:
+with tab_paths:
     st.pyplot(plot_gbm_paths(paths))
-    st.info("**Real-Time Reactivity:** Change any slider on the left to see the price envelope update instantly.")
+    st.caption("The price envelope illustrates the 95th (Green) and 5th (Red) percentile boundaries across the simulated trading horizon.")
 
-with tab2:
+with tab_pnl:
     st.pyplot(plot_pnl_distribution(results["final_pnl"]))
-    st.warning("**Hedging Slip:** PnL variance represents your residual risk after hedging.")
+    st.markdown(f"> **Institutional Note**: A wider distribution (Std Dev: ${stats['std_pnl']:.4f}) indicates higher residual risk after hedging.")
 
-with tab3:
-    st.markdown(f"""
-    ### Executive Interpretation
+with tab_logic:
+    st.markdown("### Executive Summary")
+    col_l1, col_l2 = st.columns(2)
+    with col_l1:
+        st.markdown(f"""
+        **Option Portfolio**
+        - **Asset Class**: {ticker_input if ticker_input else "Synthetic Asset"}
+        - **Theoretical Premium**: `${initial_premium:.4f}`
+        - **Model Logic**: {model_type.upper()} Calibration
+        """)
+    with col_l2:
+        st.markdown(f"""
+        **Hedge Execution**
+        - **Frequency**: {rebalance_val.title()}
+        - **Total Trades**: {stats['avg_trades']:.1f}
+        - **Cost Efficiency**: {'Optimal' if stats['avg_costs'] < initial_premium*0.05 else 'Cost Heavy'}
+        """)
     
-    *   **Option Premium**: **${initial_premium:.4f}**
-    *   **Hedging Cost**: **${stats['avg_costs']:.4f}** (Annualized slippage)
-    *   **Activity**: Total rebalancing trades: **{stats['avg_trades']:.1f}** 
-    
-    #### Market View:
-    {"Volatility is high; prioritize delta-band (threshold) hedging." if sigma_val > 0.4 else "Volatility is stable; daily rebalancing is efficient."}
-    """)
+    if stats['mean_pnl'] == 0 and initial_premium < 0.01:
+        st.error("🚨 **Deep OTM Alert**: The current Strike/Spot combination results in zero delta exposure. No hedging required.")
+
+# Footer
+st.markdown("<hr style='border: 0.1px solid rgba(255,255,255,0.1); margin-top: 50px;'>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #484f58; font-size: 0.8rem;'>AEGIS HEDGING ENGINE | BUILT FOR INSTITUTIONAL RESEARCH</p>", unsafe_allow_html=True)
